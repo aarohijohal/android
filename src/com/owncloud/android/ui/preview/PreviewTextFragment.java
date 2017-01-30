@@ -25,6 +25,8 @@ import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -32,7 +34,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ProgressBar;
-import android.widget.TextView;
+import android.widget.EditText;
 
 import com.owncloud.android.R;
 import com.owncloud.android.datamodel.FileDataStorageManager;
@@ -63,7 +65,8 @@ public class PreviewTextFragment extends FileFragment {
     private Account mAccount;
     private ProgressBar mProgressBar;
     private TransferProgressController mProgressController;
-    private TextView mTextPreview;
+    private EditText mTextEdit;
+    private String mInitialText;
     private TextLoadAsyncTask mTextLoadTask;
 
 
@@ -113,7 +116,7 @@ public class PreviewTextFragment extends FileFragment {
         View ret = inflater.inflate(R.layout.preview_text_fragment, container, false);
         mProgressBar = (ProgressBar) ret.findViewById(R.id.syncProgressBar);
         DisplayUtils.colorPreLollipopHorizontalProgressBar(mProgressBar);
-        mTextPreview = (TextView) ret.findViewById(R.id.text_preview);
+        mTextEdit = (EditText) ret.findViewById(R.id.text_preview);
 
         return ret;
     }
@@ -170,7 +173,7 @@ public class PreviewTextFragment extends FileFragment {
     }
 
     private void loadAndShowTextPreview() {
-        mTextLoadTask = new TextLoadAsyncTask(new WeakReference<>(mTextPreview));
+        mTextLoadTask = new TextLoadAsyncTask(new WeakReference<>(mTextEdit));
         mTextLoadTask.execute(getFile().getStoragePath());
     }
 
@@ -180,10 +183,10 @@ public class PreviewTextFragment extends FileFragment {
      */
     private class TextLoadAsyncTask extends AsyncTask<Object, Void, StringWriter> {
         private final String DIALOG_WAIT_TAG = "DIALOG_WAIT";
-        private final WeakReference<TextView> mTextViewReference;
+        private final WeakReference<EditText> mTextEditReference;
 
-        private TextLoadAsyncTask(WeakReference<TextView> textView) {
-            mTextViewReference = textView;
+        private TextLoadAsyncTask(WeakReference<EditText> textEdit) {
+            mTextEditReference = textEdit;
         }
 
 
@@ -232,12 +235,14 @@ public class PreviewTextFragment extends FileFragment {
 
         @Override
         protected void onPostExecute(final StringWriter stringWriter) {
-            final TextView textView = mTextViewReference.get();
+            final EditText editText = mTextEditReference.get();
 
-            if (textView != null) {
-                textView.setText(new String(stringWriter.getBuffer()));
-                textView.setVisibility(View.VISIBLE);
+            if (editText != null) {
+                editText.setText(new String(stringWriter.getBuffer()));
+                editText.setVisibility(View.VISIBLE);
             }
+
+            mInitialText = editText.getText().toString();
 
             dismissLoadingDialog();
         }
@@ -398,6 +403,26 @@ public class PreviewTextFragment extends FileFragment {
 
     @Override
     public void onStop() {
+        if (!mInitialText.equals(mTextEdit.getText().toString())) {
+            DialogInterface.OnClickListener dialogClickListener = new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    switch (which){
+                        case DialogInterface.BUTTON_POSITIVE:
+                            //Yes button clicked --> write back to the file
+                            break;
+
+                        case DialogInterface.BUTTON_NEGATIVE:
+                            // do nothing
+                            break;
+                    }
+                }
+            };
+            AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+            builder.setMessage("File " + getFile().getFileName().toString() + " modified. Save?").setPositiveButton("Yes", dialogClickListener)
+                    .setNegativeButton("No", dialogClickListener).show();
+        }
+
         super.onStop();
         Log_OC.e(TAG, "onStop");
         if (mTextLoadTask != null) {
